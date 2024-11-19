@@ -3,28 +3,57 @@ module ELang where
 data Type = Bool | Nat | Arrow Type Type deriving (Eq, Show)
 
 data Exp =
-  T
-  | F 
-  | Z 
-  | IfThenElse Exp Exp Exp 
-  | Succ Exp
-  | Pred Exp 
-  | IsZero Exp 
-  | Var String
-  | LambdaAbs String Exp
-  | App Exp Exp
+  T Type
+  | F Type
+  | Z Type
+  | IfThenElse Exp Type Exp Exp Type
+  | Succ Exp Type
+  | Pred Exp Type
+  | IsZero Exp Type
+  | Var String Type
+  | LambdaAbs String Type Exp Type
+  | App Exp Exp Type
   deriving Show
 
-isNum :: Exp -> Bool
-isNum Z     = True
-isNum (Succ n) = isNum n
-isNum _        = False
+type TypeContext = [(String, Type)]
 
-isVal :: Exp -> Bool
-isVal T = True
-isVal F = True
-isVal (LambdaAbs _ _) = True
-isVal t = isNum t
+typecheck :: TypeContext -> Exp -> Either String Type
+typecheck _ (T termType) = 
+  if termType == Bool then Right Bool else Left "Incorrect type for True"
+typecheck _ (F termType) =
+  if termType == Bool then Right Bool else Left "Incorrect type for False"
+typecheck _ (Z termType) =
+  if termType == Nat then Right Nat else Left "Incorrect type for Zero"
+typecheck ctx (IfThenElse t1 guardType t2 t3 branchesType) = do
+  typet1 <- typecheck ctx t1
+  if typet1 == Bool then do
+    typet2 <- typecheck ctx t2
+    typet3 <- typecheck ctx t3
+    if typet2 == typet3 then Right typet2 else Left "Branches have different types"
+  else Left "Guard is not a boolean"
+typecheck ctx (Succ t termType) = do
+  typet <- typecheck ctx t
+  if typet == Nat then Right Nat else Left "Argument is not a number"
+typecheck ctx (Pred t termType) = do
+  typet <- typecheck ctx t
+  if typet == Nat then Right Nat else Left "Argument is not a number"
+typecheck ctx (IsZero t termType) = do
+  typet <- typecheck ctx t
+  if typet == Nat then Right Bool else Left "Argument is not a number"
+typecheck ctx (Var x termType) =
+  case lookup x ctx of
+    Just t -> if t == termType then Right t else Left "Variable type mismatch"
+    Nothing -> Left "Variable not found in context"
+typecheck ctx (LambdaAbs x varType t2 termType) = do
+  t2Type <- typecheck ((x, varType) : ctx) t2
+  Right (Arrow varType t2Type)
+typecheck ctx (App t1 t2 termType) = do
+  t1Type <- typecheck ctx t1
+  t2Type <- typecheck ctx t2
+  case t1Type of
+    Arrow t11 t12 -> if t11 == t2Type then Right t12 else Left "Argument type mismatch"
+    _ -> Left "Function type expected"
+
 
 freeVariables :: Exp -> [String]
 freeVariables (Var x) = [x]
@@ -108,13 +137,13 @@ reduceStar t =
       _       -> t
 
 customPrint :: Exp -> String
-customPrint T = "true"
-customPrint F = "false"
-customPrint Z = "0"
-customPrint (IfThenElse t1 t2 t3) = "if " ++ customPrint t1 ++ " then " ++ customPrint t2 ++ " else " ++ customPrint t3
-customPrint (Succ t) = "succ " ++ customPrint t
-customPrint (Pred t) = "pred " ++ customPrint t
-customPrint (IsZero t) = "iszero " ++ customPrint t
-customPrint (Var x) = x
-customPrint (LambdaAbs x t) = "/" ++ x ++ "." ++ customPrint t 
-customPrint (App t1 t2) = "(" ++ customPrint t1 ++ ") " ++ customPrint t2
+customPrint (T _) = "true"
+customPrint (F _) = "false"
+customPrint (Z _) = "0"
+customPrint (IfThenElse t1 guardType t2 t3 branchesType) = "if " ++ customPrint t1 ++ " then " ++ customPrint t2 ++ " else " ++ customPrint t3
+customPrint (Succ t _) = "succ " ++ customPrint t
+customPrint (Pred t _) = "pred " ++ customPrint t
+customPrint (IsZero t _) = "iszero " ++ customPrint t
+customPrint (Var x _) = x
+customPrint (LambdaAbs x _ t _) = "/" ++ x ++ "." ++ customPrint t 
+customPrint (App t1 t2 _) = "(" ++ customPrint t1 ++ ") " ++ customPrint t2
