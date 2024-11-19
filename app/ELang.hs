@@ -1,5 +1,7 @@
 module ELang where
 
+data Type = Bool | Nat | Arrow Type Type deriving (Eq, Show)
+
 data Exp =
   T
   | F 
