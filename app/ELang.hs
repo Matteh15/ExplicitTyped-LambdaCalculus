@@ -105,4 +105,14 @@ reduceStar t =
       Just t' -> reduceStar t'
       _       -> t
 
-t = reduceStar (IfThenElse (IsZero (Succ (Pred Z))) (Pred (Succ Z)) Z)
+customPrint :: Exp -> String
+customPrint T = "true"
+customPrint F = "false"
+customPrint Z = "0"
+customPrint (IfThenElse t1 t2 t3) = "if " ++ customPrint t1 ++ " then " ++ customPrint t2 ++ " else " ++ customPrint t3
+customPrint (Succ t) = "succ " ++ customPrint t
+customPrint (Pred t) = "pred " ++ customPrint t
+customPrint (IsZero t) = "iszero " ++ customPrint t
+customPrint (Var x) = x
+customPrint (LambdaAbs x t) = "/" ++ x ++ "." ++ customPrint t 
+customPrint (App t1 t2) = "(" ++ customPrint t1 ++ ") " ++ customPrint t2
