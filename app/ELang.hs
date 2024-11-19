@@ -56,13 +56,13 @@ typecheck ctx (App t1 t2 termType) = do
 
 
 freeVariables :: Exp -> [String]
-freeVariables (Var x) = [x]
-freeVariables (LambdaAbs x t) = filter (/= x) (freeVariables t)
-freeVariables (App t1 t2) = freeVariables t1 ++ freeVariables t2
-freeVariables (IfThenElse t1 t2 t3) = freeVariables t1 ++ freeVariables t2 ++ freeVariables t3
-freeVariables (Succ t) = freeVariables t
-freeVariables (Pred t) = freeVariables t
-freeVariables (IsZero t) = freeVariables t
+freeVariables (Var x _) = [x]
+freeVariables (LambdaAbs x _ t _) = filter (/= x) (freeVariables t)
+freeVariables (App t1 t2 _) = freeVariables t1 ++ freeVariables t2
+freeVariables (IfThenElse t1 _ t2 t3 _) = freeVariables t1 ++ freeVariables t2 ++ freeVariables t3
+freeVariables (Succ t _) = freeVariables t
+freeVariables (Pred t _) = freeVariables t
+freeVariables (IsZero t _) = freeVariables t
 freeVariables _ = []
 
 freshVariable :: String -> [String] -> String
