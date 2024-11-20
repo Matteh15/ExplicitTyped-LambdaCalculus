@@ -11,8 +11,8 @@ data Exp =
   | Pred Exp
   | IsZero Exp
   | Var String
-  | LambdaAbs String Type Exp Type
-  | App Exp Exp Type
+  | LambdaAbs String Type Exp
+  | App Exp Exp
   deriving Show
 
 type TypeContext = [(String, Type)]
@@ -36,34 +36,35 @@ typecheck ctx (IfThenElse t1 t2 t3) = do
     typet3 <- typecheck ctx t3
     if typet2 == typet3 then Right typet2 else Left "Branches have different types"
   else Left "If guard is not a boolean"
-typecheck ctx (Succ t) = do
-  typet <- typecheck ctx t
-  if typet == Nat then Right Nat else Left "Argument of 'Succ' is not a number"
-typecheck ctx (Pred t) = do
-  typet <- typecheck ctx t
-  if typet == Nat then Right Nat else Left "Argument of 'Pred' is not a number"
-typecheck ctx (IsZero t) = do
-  typet <- typecheck ctx t
-  if typet == Nat then Right Bool else Left "Argument of 'IsZero' is not a number"
-typecheck ctx (Var x) =
-  case lookup x ctx of
-    Just t -> Right t
-    Nothing -> Left "Variable not found in context"
-typecheck ctx (LambdaAbs x varType t2 termType) = do
-  t2Type <- typecheck ((x, varType) : ctx) t2
-  Right (Arrow varType t2Type)
-typecheck ctx (App t1 t2 termType) = do
+typecheck ctx (Var x) = case lookup x ctx of
+  Just t -> Right t
+  Nothing -> Left ("Variable " ++ x ++ " not found in context")
+typecheck ctx (LambdaAbs x t1 body) = do
+  bodyType <- typecheck ((x, t1) : ctx) body
+  Right (Arrow t1 bodyType)
+typecheck ctx (App t1 t2) = do
   t1Type <- typecheck ctx t1
   t2Type <- typecheck ctx t2
   case t1Type of
-    Arrow t11 t12 -> if t11 == t2Type then Right t12 else Left "Argument of function has wrong type"
+    Arrow t2Type' t3Type -> if t2Type == t2Type' then Right t3Type else Left "Argument type mismatch"
     _ -> Left "Function type expected"
+typecheck ctx (Succ t) = do
+  typet <- typecheck ctx t
+  if typet == Nat then Right Nat else Left "Succ expects a Nat"
+typecheck ctx (Pred t) = do
+  typet <- typecheck ctx t
+  if typet == Nat then Right Nat else Left "Pred expects a Nat"
+typecheck ctx (IsZero t) = do
+  typet <- typecheck ctx t
+  if typet == Nat then Right Bool else Left "IsZero expects a Nat"
+
+
 
 
 freeVariables :: Exp -> [String]
 freeVariables (Var x) = [x]
-freeVariables (LambdaAbs x _ t _) = filter (/= x) (freeVariables t)
-freeVariables (App t1 t2 _) = freeVariables t1 ++ freeVariables t2
+freeVariables (LambdaAbs x _ t) = filter (/= x) (freeVariables t)
+freeVariables (App t1 t2) = freeVariables t1 ++ freeVariables t2
 freeVariables (IfThenElse t1 t2 t3 ) = freeVariables t1 ++ freeVariables t2 ++ freeVariables t3
 freeVariables (Succ t) = freeVariables t
 freeVariables (Pred t) = freeVariables t
@@ -80,14 +81,14 @@ substitute x s (Var y)
   | x == y = s
   | otherwise = Var y
 
-substitute x s (LambdaAbs y varType t bodyType)
-  | x == y = LambdaAbs y varType t bodyType
+substitute x s (LambdaAbs y varType t)
+  | x == y = LambdaAbs y varType t
   | y `elem` freeVariables s =
       let z = freshVariable y (freeVariables s ++ freeVariables t)
-      in LambdaAbs z varType (substitute y (Var z) t) bodyType
-  | otherwise = LambdaAbs y varType (substitute x s t) bodyType
+      in LambdaAbs z varType (substitute y (Var z) t)
+  | otherwise = LambdaAbs y varType (substitute x s t)
 
-substitute x s (App t1 t2 appType) = App (substitute x s t1) (substitute x s t2) appType
+substitute x s (App t1 t2) = App (substitute x s t1) (substitute x s t2)
 substitute x s (IfThenElse t1 t2 t3) = IfThenElse (substitute x s t1) (substitute x s t2) (substitute x s t3)
 substitute x s (Succ t) = Succ (substitute x s t)
 substitute x s (Pred t) = Pred (substitute x s t)
@@ -98,7 +99,7 @@ reduce :: TypeContext -> Exp -> Either String Exp
 reduce _ T = Left "Cannot reduce True (it is a value)"
 reduce _ F = Left "Cannot reduce False (it is a value)"
 reduce _ Z = Left "Cannot reduce Zero (it is a value)"
-reduce _ (LambdaAbs x _ body _) = Left ("Cannot reduce a lambda abstraction: " ++ x ++ ". " ++ customPrint body)
+reduce _ (LambdaAbs x _ body) = Left ("Cannot reduce a lambda abstraction: " ++ x ++ ". " ++ customPrint body)
 
 reduce env (Succ t) = do
   t' <- reduce env t
@@ -126,16 +127,16 @@ reduce env (IfThenElse t t1 t2) = do
 --   body' <- reduce env body
 --   Right (LambdaAbs x paramType body' bodyType)
 
-reduce env (App (LambdaAbs x _ body _) t _) = Right (substitute x t body)
-reduce env (App t1 t2 applicationType) | isVal t2 = do
+reduce env (App (LambdaAbs x _ body) t) = Right (substitute x t body)
+reduce env (App t1 t2) | isVal t2 = do
   t1' <- reduce env t1
-  Right (App t1' t2 applicationType)
-reduce env (App t1 t2 applicationType) | isVal t1 = do
+  Right (App t1' t2)
+reduce env (App t1 t2) | isVal t1 = do
   t2' <- reduce env t2
-  Right (App t1 t2' applicationType)
-reduce env (App t1 t2 applicationType) = do
+  Right (App t1 t2')
+reduce env (App t1 t2) = do
   t1' <- reduce env t1
-  Right (App t1' t2 applicationType)
+  Right (App t1' t2)
 
 reduce _ (Var x) = Left ("Cannot reduce a free variable: " ++ x)
 
@@ -159,7 +160,7 @@ customPrint (Succ t) = "succ " ++ customPrint t
 customPrint (Pred t) = "pred " ++ customPrint t
 customPrint (IsZero t) = "iszero " ++ customPrint t
 customPrint (Var x) = x
-customPrint (LambdaAbs x _ t _) = "/" ++ x ++ "." ++ customPrint t
-customPrint (App t1 t2 _) = "(" ++ customPrint t1 ++ ") " ++ customPrint t2
+customPrint (LambdaAbs x _ t) = "/" ++ x ++ "." ++ customPrint t
+customPrint (App t1 t2) = "(" ++ customPrint t1 ++ ") " ++ customPrint t2
 
 
