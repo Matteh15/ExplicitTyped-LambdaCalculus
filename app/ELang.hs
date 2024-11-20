@@ -35,16 +35,16 @@ typecheck ctx (IfThenElse t1 t2 t3) = do
     typet2 <- typecheck ctx t2
     typet3 <- typecheck ctx t3
     if typet2 == typet3 then Right typet2 else Left "Branches have different types"
-  else Left "Guard is not a boolean"
+  else Left "If guard is not a boolean"
 typecheck ctx (Succ t) = do
   typet <- typecheck ctx t
-  if typet == Nat then Right Nat else Left "Argument is not a number"
+  if typet == Nat then Right Nat else Left "Argument of 'Succ' is not a number"
 typecheck ctx (Pred t) = do
   typet <- typecheck ctx t
-  if typet == Nat then Right Nat else Left "Argument is not a number"
+  if typet == Nat then Right Nat else Left "Argument of 'Pred' is not a number"
 typecheck ctx (IsZero t) = do
   typet <- typecheck ctx t
-  if typet == Nat then Right Bool else Left "Argument is not a number"
+  if typet == Nat then Right Bool else Left "Argument of 'IsZero' is not a number"
 typecheck ctx (Var x) =
   case lookup x ctx of
     Just t -> Right t
@@ -56,7 +56,7 @@ typecheck ctx (App t1 t2 termType) = do
   t1Type <- typecheck ctx t1
   t2Type <- typecheck ctx t2
   case t1Type of
-    Arrow t11 t12 -> if t11 == t2Type then Right t12 else Left "Argument type mismatch"
+    Arrow t11 t12 -> if t11 == t2Type then Right t12 else Left "Argument of function has wrong type"
     _ -> Left "Function type expected"
 
 
