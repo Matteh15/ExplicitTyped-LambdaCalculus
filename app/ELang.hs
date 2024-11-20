@@ -98,6 +98,7 @@ reduce :: TypeContext -> Exp -> Either String Exp
 reduce _ T = Left "Cannot reduce True (it is a value)"
 reduce _ F = Left "Cannot reduce False (it is a value)"
 reduce _ Z = Left "Cannot reduce Zero (it is a value)"
+reduce _ (LambdaAbs x _ body _) = Left ("Cannot reduce a lambda abstraction: " ++ x ++ ". " ++ customPrint body)
 
 reduce env (Succ t) = do
   t' <- reduce env t
@@ -121,18 +122,20 @@ reduce env (IfThenElse t t1 t2) = do
   t' <- reduce env t
   Right (IfThenElse t' t1 t2)
 
-reduce env (LambdaAbs x paramType body bodyType) = do
-  body' <- reduce env body
-  Right (LambdaAbs x paramType body' bodyType)
+-- reduce env (LambdaAbs x paramType body bodyType) = do
+--   body' <- reduce env body
+--   Right (LambdaAbs x paramType body' bodyType)
 
-reduce env (App (LambdaAbs x paramType body bodyType) v2 appType)
-  | isVal v2 = Right (substitute x v2 body)
-reduce env (App t1 t2 appType) | isVal t1 = do
-  t2' <- reduce env t2
-  Right (App t1 t2' appType)
-reduce env (App t1 t2 appType) = do
+reduce env (App (LambdaAbs x _ body _) t _) = Right (substitute x t body)
+reduce env (App t1 t2 applicationType) | isVal t2 = do
   t1' <- reduce env t1
-  Right (App t1' t2 appType)
+  Right (App t1' t2 applicationType)
+reduce env (App t1 t2 applicationType) | isVal t1 = do
+  t2' <- reduce env t2
+  Right (App t1 t2' applicationType)
+reduce env (App t1 t2 applicationType) = do
+  t1' <- reduce env t1
+  Right (App t1' t2 applicationType)
 
 reduce _ (Var x) = Left ("Cannot reduce a free variable: " ++ x)
 
@@ -144,8 +147,8 @@ reduceStar ctx exp = do
 reduceFully :: TypeContext -> Exp -> Either String Exp
 reduceFully ctx exp = 
   case reduce ctx exp of
-    Left _ -> Right exp
-    Right exp' -> reduceFully ctx exp'
+    Left _ -> Right exp                 -- No more reductions possible
+    Right exp' -> reduceFully ctx exp'  -- Continue reducing
 
 customPrint :: Exp -> String
 customPrint T = "true"
