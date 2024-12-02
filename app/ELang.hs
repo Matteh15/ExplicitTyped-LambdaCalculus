@@ -1,6 +1,11 @@
 module ELang where
 
-data Type = Bool | Nat | Arrow Type Type deriving (Eq, Show)
+data Type = Bool | Nat | Arrow Type Type deriving (Eq)
+
+instance Show Type where
+  show Bool = "Bool"
+  show Nat = "Nat"
+  show (Arrow t1 t2) = "(" ++ show t1 ++ " -> " ++ show t2 ++ ")"
 
 data Exp =
   T
@@ -24,41 +29,50 @@ isVal Z = True
 isVal (LambdaAbs {}) = True
 isVal _ = False
 
-
 typecheck :: TypeContext -> Exp -> Either String Type
 typecheck _ T = Right Bool
 typecheck _ F = Right Bool
 typecheck _ Z = Right Nat
+
 typecheck ctx (IfThenElse t1 t2 t3) = do
   typet1 <- typecheck ctx t1
   if typet1 == Bool then do
     typet2 <- typecheck ctx t2
     typet3 <- typecheck ctx t3
-    if typet2 == typet3 then Right typet2 else Left "Branches have different types"
+    if typet2 == typet3 
+      then Right typet2
+      else Left "Branches have different types"
   else Left "If guard is not a boolean"
+
 typecheck ctx (Var x) = case lookup x ctx of
   Just t -> Right t
   Nothing -> Left ("Variable " ++ x ++ " not found in context")
+
 typecheck ctx (LambdaAbs x t1 body) = do
   bodyType <- typecheck ((x, t1) : ctx) body
   Right (Arrow t1 bodyType)
+
 typecheck ctx (App t1 t2) = do
   t1Type <- typecheck ctx t1
   t2Type <- typecheck ctx t2
   case t1Type of
-    Arrow t2Type' t3Type -> if t2Type == t2Type' then Right t3Type else Left "Argument type mismatch"
+    Arrow t2Type' t3Type -> 
+      if t2Type == t2Type' 
+        then Right t3Type 
+        else Left "Argument type mismatch"
     _ -> Left "Function type expected"
+
 typecheck ctx (Succ t) = do
   typet <- typecheck ctx t
   if typet == Nat then Right Nat else Left "Succ expects a Nat"
+
 typecheck ctx (Pred t) = do
   typet <- typecheck ctx t
   if typet == Nat then Right Nat else Left "Pred expects a Nat"
+
 typecheck ctx (IsZero t) = do
   typet <- typecheck ctx t
   if typet == Nat then Right Bool else Left "IsZero expects a Nat"
-
-
 
 
 freeVariables :: Exp -> [String]
